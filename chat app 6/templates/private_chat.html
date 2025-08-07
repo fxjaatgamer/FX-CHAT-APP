@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}Chat with {{ friend }} | FX CHAT{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <!-- Chat Sidebar - Hidden on mobile -->
+    <div class="chat-sidebar mobile-hidden">
+        <div class="chat-header">
+            <h2>Friends</h2>
+            <a href="{{ url_for('chat') }}" class="back-link">
+                <i class="fa-solid fa-arrow-left"></i>
+                Group Chat
+            </a>
+        </div>
+        <div class="friends-list">
+            {% for friend_name in friends %}
+            <div class="friend-item {% if friend_name == friend %}active{% endif %}" 
+                 onclick="window.location.href='{{ url_for('private_chat', friend_username=friend_name) }}'">
+                <div class="friend-avatar">
+                    {{ friend_name[:2].upper() }}
+                </div>
+                <div class="friend-info">
+                    <div class="friend-name">{{ friend_name }}</div>
+                    <div class="friend-status-text">
+                        {% if friend_name == friend %}
+                            <span class="active-indicator">● Active</span>
+                        {% else %}
+                            Click to chat
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                <i class="fa-solid fa-user-group" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                <p>No friends yet.</p>
+                <p style="font-size: 12px; margin-top: 8px;">Use the search to find and add friends</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="chat-main">
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <div class="chat-avatar">
+                    {{ friend[:2].upper() }}
+                </div>
+                <div class="chat-details">
+                    <h2>{{ friend }}</h2>
+                    <p class="chat-status">Private conversation</p>
+                </div>
+            </div>
+            <div class="chat-actions">
+                <button class="action-btn" title="Search messages">
+                    <i class="fa-solid fa-search"></i>
+                </button>
+                <button class="action-btn" title="More options">
+                    <i class="fa-solid fa-ellipsis-v"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="messages">
+            {% for msg in messages %}
+                {% if msg["from_user"] == username %}
+                <div class="message you">
+                    <div class="message-content">{{ msg["message"] }}</div>
+                    <div class="message-meta">You | {{ msg["timestamp"] }}</div>
+                </div>
+                {% else %}
+                <div class="message them">
+                    <div class="message-content">{{ msg["message"] }}</div>
+                    <div class="message-meta">{{ msg["from_user"] }} | {{ msg["timestamp"] }}</div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        
+        <div class="chat-input">
+            <form class="chat-input-form" id="message-form" autocomplete="off" onsubmit="return false;">
+                <div class="input-wrapper">
+                    <input type="text" id="message-text" placeholder="Type your message to {{ friend }}..." required>
+                    <button type="submit" id="send-btn">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    // Socket.io setup
+    var socket = io();
+    var currentFriend = "{{ friend }}";
+
+    // Send private message
+    document.getElementById('send-btn').onclick = function() {
+        const input = document.getElementById('message-text');
+        const msg = input.value.trim();
+        if (msg.length === 0) return;
+        
+        socket.emit('private_message', {
+            msg: msg,
+            to: currentFriend
+        });
+        input.value = '';
+    };
+
+    // Handle form submission
+    document.getElementById('message-form').onsubmit = function(e) {
+        e.preventDefault();
+        document.getElementById('send-btn').click();
+    };
+
+    // Handle Enter key
+    document.getElementById('message-text').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            document.getElementById('send-btn').click();
+        }
+    });
+
+    // Receive private messages
+    socket.on('private_message', function(data) {
+        const messagesDiv = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = data.from === "You" ? 'message you' : 'message them';
+        div.innerHTML = `
+            <div class="message-content">${data.msg}</div>
+            <div class="message-meta">${data.from} | ${data.time}</div>
+        `;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    // Auto-scroll to bottom on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+</script>
+
+<style>
+/* Private Chat Specific Styles */
+.chat-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.chat-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--gmail-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    font-size: 16px;
+}
+
+.chat-details h2 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-dark);
+    margin: 0;
+}
+
+.chat-status {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.chat-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+    background-color: var(--bg-gray);
+}
+
+.back-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gmail-blue);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.back-link:hover {
+    background-color: var(--bg-gray);
+}
+
+.friend-item.active {
+    background-color: #e8f0fe;
+    border-left: 3px solid var(--gmail-blue);
+}
+
+.active-indicator {
+    color: var(--gmail-green);
+    font-weight: 500;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--bg-light);
+    border: 1px solid #e0e0e0;
+    border-radius: 24px;
+    padding: 4px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--gmail-blue);
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+}
+
+.input-wrapper input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 12px 16px;
+    font-size: 14px;
+    background: transparent;
+}
+
+.input-wrapper button {
+    width: 40px;
+    height: 40px;
+    background-color: var(--gmail-blue);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.input-wrapper button:hover {
+    background-color: #1557b0;
+}
+
+.input-wrapper button:disabled {
+    background-color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* Message typing indicator */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 16px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 2px;
+}
+
+.typing-dot {
+    width: 4px;
+    height: 4px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+    0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Mobile Responsive Design */
+@media (max-width: 768px) {
+    /* Hide friends list in chat area on mobile */
+    .mobile-hidden {
+        display: none !important;
+    }
+    
+    /* Make chat area take full width on mobile */
+    .chat-container {
+        flex-direction: column;
+    }
+    
+    .chat-main {
+        width: 100%;
+        height: calc(100vh - var(--header-height));
+    }
+    
+    .chat-header-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .chat-actions {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+    }
+    
+    .chat-header {
+        position: relative;
+        padding-bottom: 60px;
+    }
+    
+    /* Adjust message layout for mobile */
+    .message {
+        max-width: 85%;
+    }
+    
+    .message-content {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+    
+    /* Mobile input adjustments */
+    .chat-input {
+        padding: 12px 16px;
+    }
+    
+    .input-wrapper input {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 10px 14px;
+    }
+    
+    .input-wrapper button {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (min-width: 769px) {
+    /* Desktop - show friends list */
+    .mobile-hidden {
+        display: flex !important;
+    }
+    
+    .chat-container {
+        flex-direction: row;
+    }
+    
+    .chat-sidebar {
+        width: 300px;
+        height: 100%;
+        border-right: 1px solid #e0e0e0;
+        border-bottom: none;
+    }
+    
+    .chat-main {
+        flex: 1;
+        min-height: auto;
+    }
+}
+</style>
+{% endblock %}

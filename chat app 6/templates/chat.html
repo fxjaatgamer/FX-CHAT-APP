@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Chat | FX CHAT{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <!-- Chat Sidebar - Hidden on mobile -->
+    <div class="chat-sidebar mobile-hidden">
+        <div class="chat-header">
+            <h2>Friends</h2>
+        </div>
+        <div class="friends-list">
+            {% for friend in friends %}
+            <div class="friend-item" onclick="window.location.href='{{ url_for('private_chat', friend_username=friend) }}'">
+                <div class="friend-avatar">
+                    {{ friend[:2].upper() }}
+                </div>
+                <div class="friend-info">
+                    <div class="friend-name">{{ friend }}</div>
+                    <div class="friend-status-text">Click for private chat</div>
+                </div>
+            </div>
+            {% else %}
+            <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                <i class="fa-solid fa-user-group" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                <p>No friends yet.</p>
+                <p style="font-size: 12px; margin-top: 8px;">Use the search to find and add friends</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="chat-main">
+        <div class="chat-header">
+            <h2>Public Chat</h2>
+        </div>
+        
+        <div class="chat-messages" id="messages">
+            {% for msg in messages %}
+                {% if msg["username"] == username %}
+                <div class="message you">
+                    <div class="message-content">{{ msg["message"] }}</div>
+                    <div class="message-meta">{{ msg["username"] }}{% if msg["username"] == username %} (You){% endif %} | {{ msg["timestamp"] }}</div>
+                </div>
+                {% else %}
+                <div class="message them">
+                    <div class="message-content">{{ msg["message"] }}</div>
+                    <div class="message-meta">{{ msg["username"] }} | {{ msg["timestamp"] }}</div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        
+        <div class="chat-input">
+            <form class="chat-input-form" id="message-form" autocomplete="off" onsubmit="return false;">
+                <div class="input-wrapper">
+                    <input type="text" id="message-text" placeholder="Type your message..." required>
+                    <button type="submit" id="send-btn">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    // Socket.io setup
+    var socket = io();
+
+    // Send public chat message
+    document.getElementById('send-btn').onclick = function() {
+        const input = document.getElementById('message-text');
+        const msg = input.value.trim();
+        if (msg.length === 0) return;
+        socket.emit('message', {msg: msg});
+        input.value = '';
+    };
+
+    // Also handle form submission
+    document.getElementById('message-form').onsubmit = function(e) {
+        e.preventDefault();
+        document.getElementById('send-btn').click();
+    };
+
+    // Receive public chat messages
+    socket.on('message', function(data) {
+        const messagesDiv = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = data.user === "{{ username }}" ? 'message you' : 'message them';
+        div.innerHTML = `
+            <div class="message-content">${data.msg}</div>
+            <div class="message-meta">${data.user}${data.user === "{{ username }}" ? ' (You)' : ''} | ${data.time}</div>
+        `;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    // Auto-scroll to bottom when new messages arrive
+    const messagesContainer = document.getElementById('messages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+</script>
+
+<style>
+/* Mobile Responsive Design */
+@media (max-width: 768px) {
+    /* Hide friends list in chat area on mobile */
+    .mobile-hidden {
+        display: none !important;
+    }
+    
+    /* Make chat area take full width on mobile */
+    .chat-container {
+        flex-direction: column;
+    }
+    
+    .chat-main {
+        width: 100%;
+        height: calc(100vh - var(--header-height));
+    }
+    
+    /* Adjust message layout for mobile */
+    .message {
+        max-width: 85%;
+    }
+    
+    .message-content {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+    
+    /* Mobile input adjustments */
+    .chat-input {
+        padding: 12px 16px;
+    }
+    
+    .input-wrapper input {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 10px 14px;
+    }
+    
+    .input-wrapper button {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (min-width: 769px) {
+    /* Desktop - show friends list */
+    .mobile-hidden {
+        display: flex !important;
+    }
+    
+    .chat-container {
+        flex-direction: row;
+    }
+    
+    .chat-sidebar {
+        width: 300px;
+        height: 100%;
+        border-right: 1px solid #e0e0e0;
+        border-bottom: none;
+    }
+    
+    .chat-main {
+        flex: 1;
+        min-height: auto;
+    }
+}
+</style>
+{% endblock %}

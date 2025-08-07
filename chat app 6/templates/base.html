@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>{% block title %}FX CHAT{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+
+<body class="{% if current_user.is_authenticated %}authenticated{% else %}guest{% endif %}">
+    <!-- Gmail-style Header -->
+    <div class="gmail-header">
+        <div class="header-left">
+            <button class="hamburger-menu" id="hamburger-btn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <div class="logo">
+                <i class="fa-solid fa-comments"></i>
+                <span>FX CHAT</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="user-info">
+                <span>{{ current_user.id if current_user.is_authenticated else 'Guest' }}</span>
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('logout') }}" class="logout-link">
+                    <i class="fa-solid fa-sign-out-alt"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gmail-style Sidebar - Only show when authenticated -->
+    {% if current_user.is_authenticated %}
+    <div class="gmail-sidebar" id="sidebar">
+        <!-- Compose Button -->
+        <button class="compose-btn" id="compose-btn">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Chat</span>
+        </button>
+        
+        <!-- Navigation Categories -->
+        <div class="sidebar-nav">
+            <a href="{{ url_for('chat') }}" class="nav-item {% if request.endpoint == 'chat' %}active{% endif %}">
+                <i class="fa-solid fa-home"></i>
+                <span>Home</span>
+                <span class="badge" id="home-badge"></span>
+            </a>
+            
+            <a href="{{ url_for('friends') }}" class="nav-item {% if request.endpoint == 'friends' %}active{% endif %}">
+                <i class="fa-solid fa-user-group"></i>
+                <span>Friends</span>
+                <span class="badge" id="friends-badge">{{ friends_count if friends_count else '' }}</span>
+            </a>
+            
+            <a href="#" class="nav-item" id="inbox-nav">
+                <i class="fa-solid fa-inbox"></i>
+                <span>Inbox</span>
+                <span class="badge" id="inbox-badge"></span>
+            </a>
+            
+            <a href="#" class="nav-item" id="sent-nav">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Sent</span>
+            </a>
+            
+            <a href="#" class="nav-item" id="drafts-nav">
+                <i class="fa-solid fa-file-lines"></i>
+                <span>Drafts</span>
+            </a>
+            
+            <a href="#" class="nav-item" id="search-nav">
+                <i class="fa-solid fa-search"></i>
+                <span>Search</span>
+            </a>
+        </div>
+        
+        <!-- Labels Section -->
+        <div class="labels-section">
+            <div class="labels-header">
+                <span>Labels</span>
+                <button class="add-label-btn" id="add-label-btn">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+            <div class="labels-list">
+                <div class="label-item">
+                    <i class="fa-solid fa-tag"></i>
+                    <span>Important</span>
+                </div>
+                <div class="label-item">
+                    <i class="fa-solid fa-tag"></i>
+                    <span>Work</span>
+                </div>
+                <div class="label-item">
+                    <i class="fa-solid fa-tag"></i>
+                    <span>Personal</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Sidebar overlay - Only show when authenticated -->
+    {% if current_user.is_authenticated %}
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    {% endif %}
+    
+    <!-- Search Modal - Only show when authenticated -->
+    {% if current_user.is_authenticated %}
+    <div id="search-modal" class="search-modal" style="display: none;">
+        <div class="search-modal-content">
+            <div class="search-modal-header">
+                <h3>Find New Friends</h3>
+                <button class="close-search-btn" id="close-search-modal">&times;</button>
+            </div>
+            <div class="search-modal-body">
+                <input type="text" id="global-search-input" placeholder="Search users to send friend requests..." class="search-input">
+                <div id="global-search-results" class="search-results">
+                    <p class="search-placeholder">Type a username to search for friends</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Main Content Area -->
+    <div class="main-content" id="main-content">
+        {% block content %}{% endblock %}
+    </div>
+    
+    <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing Gmail-style interface...');
+            
+            // Only initialize sidebar functionality if user is authenticated
+            {% if current_user.is_authenticated %}
+            // Hamburger menu functionality
+            const hamburgerBtn = document.getElementById('hamburger-btn');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const mainContent = document.getElementById('main-content');
+            
+            console.log('Elements found:', {
+                hamburgerBtn: !!hamburgerBtn,
+                sidebar: !!sidebar,
+                overlay: !!overlay,
+                mainContent: !!mainContent
+            });
+        
+            function openSidebar() {
+                sidebar.classList.add('active');
+                overlay.classList.add('active');
+                hamburgerBtn.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+            
+            function closeSidebar() {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                hamburgerBtn.classList.remove('active');
+                document.body.style.overflow = 'auto';
+            }
+            
+            hamburgerBtn.addEventListener('click', openSidebar);
+            overlay.addEventListener('click', closeSidebar);
+            
+            // Close sidebar on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+                    closeSidebar();
+                }
+            });
+
+            // Compose button functionality
+            const composeBtn = document.getElementById('compose-btn');
+            if (composeBtn) {
+                composeBtn.addEventListener('click', function() {
+                    closeSidebar();
+                    // Open search modal for new chat
+                    openSearchModal();
+                });
+            }
+
+            // Search Modal functionality
+            const searchModal = document.getElementById('search-modal');
+            const closeSearchBtn = document.getElementById('close-search-modal');
+            const globalSearchInput = document.getElementById('global-search-input');
+            const globalSearchResults = document.getElementById('global-search-results');
+
+            function openSearchModal() {
+                searchModal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeSearchModal() {
+                searchModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+                globalSearchInput.value = '';
+                globalSearchResults.innerHTML = '<p class="search-placeholder">Type a username to search for friends</p>';
+            }
+            
+            if (closeSearchBtn) {
+                closeSearchBtn.addEventListener('click', closeSearchModal);
+            }
+
+            if (globalSearchInput) {
+                globalSearchInput.addEventListener('input', function() {
+                    const query = this.value.trim();
+
+                    if (query.length > 0) {
+                        fetch(`/search_users?query=${encodeURIComponent(query)}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                globalSearchResults.innerHTML = '';
+
+                                if (data.users.length > 0) {
+                                    data.users.forEach(user => {
+                                        const userDiv = document.createElement('div');
+                                        userDiv.className = 'search-result-item';
+
+                                        let buttonHtml = '';
+                                        if (user.status === 'available') {
+                                            buttonHtml = `<button onclick="sendFriendRequest('${user.username}')" class="add-friend-btn">Add Friend</button>`;
+                                        } else if (user.status === 'pending') {
+                                            buttonHtml = '<span class="pending-status">Pending</span>';
+                                        } else if (user.status === 'friend') {
+                                            buttonHtml = '<span class="friend-status">✓ Friend</span>';
+                                        }
+
+                                        userDiv.innerHTML = `
+                                            <div class="user-info">
+                                                <i class="fa-solid fa-user"></i>
+                                                <span>${user.username}</span>
+                                            </div>
+                                            <div class="user-action">${buttonHtml}</div>
+                                        `;
+
+                                        globalSearchResults.appendChild(userDiv);
+                                    });
+                                } else {
+                                    globalSearchResults.innerHTML = '<p class="no-results">No users found.</p>';
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error fetching users:', error);
+                                globalSearchResults.innerHTML = '<p class="error-message">Error searching users. Please try again.</p>';
+                            });
+                    } else {
+                        globalSearchResults.innerHTML = '<p class="search-placeholder">Type a username to search for friends</p>';
+                    }
+                });
+            }
+
+            // Navigation item click handlers
+            const inboxNav = document.getElementById('inbox-nav');
+            const sentNav = document.getElementById('sent-nav');
+            const draftsNav = document.getElementById('drafts-nav');
+            const searchNav = document.getElementById('search-nav');
+
+            if (inboxNav) {
+                inboxNav.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeSidebar();
+                    // Redirect to inbox or show inbox content
+                    window.location.href = "{{ url_for('chat') }}";
+                });
+            }
+
+            if (sentNav) {
+                sentNav.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeSidebar();
+                    // Show sent messages
+                    alert('Sent messages feature coming soon!');
+                });
+            }
+
+            if (draftsNav) {
+                draftsNav.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeSidebar();
+                    // Show drafts
+                    alert('Drafts feature coming soon!');
+                });
+            }
+
+            if (searchNav) {
+                searchNav.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeSidebar();
+                    openSearchModal();
+                });
+            }
+
+            // Add label functionality
+            const addLabelBtn = document.getElementById('add-label-btn');
+            if (addLabelBtn) {
+                addLabelBtn.addEventListener('click', function() {
+                    const labelName = prompt('Enter label name:');
+                    if (labelName && labelName.trim()) {
+                        // Add new label to the list
+                        const labelsList = document.querySelector('.labels-list');
+                        const newLabel = document.createElement('div');
+                        newLabel.className = 'label-item';
+                        newLabel.innerHTML = `
+                            <i class="fa-solid fa-tag"></i>
+                            <span>${labelName.trim()}</span>
+                        `;
+                        labelsList.appendChild(newLabel);
+                    }
+                });
+            }
+            {% endif %}
+        });
+
+        function sendFriendRequest(username) {
+            fetch(`/send_friend_request/${encodeURIComponent(username)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Refresh search results
+                        document.getElementById('global-search-input').dispatchEvent(new Event('input'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error sending friend request:', error);
+                });
+        }
+    </script>
+</body>
+
+</html>
